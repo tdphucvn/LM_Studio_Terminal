@@ -4,11 +4,13 @@ A Node.js script that uses LM Studio to analyze images with local LLM models. Pe
 
 ## Features
 
-- 🖼️ **Flexible Image Input**: Support for any image format
+- 🖼️ **Flexible Image Input**: Support for any image format with absolute or relative paths
+- 📄 **File Input**: Include text files in your prompts for document analysis
+- 💬 **Text-Only Mode**: Have conversations without images or files
 - 🤖 **Local LLM Processing**: Uses LM Studio for privacy and speed
-- 💬 **Custom Prompts**: Ask specific questions about images
-- 📊 **Formatted Output**: Clean, readable terminal output
-- ⚡ **Command Line Interface**: Easy to use with various options
+- ⚡ **Progress Indicator**: Visual feedback during response generation
+- 📊 **Clean Output**: Minimal, focused output without verbose logging
+- 🔧 **Command Line Interface**: Easy to use with various options
 
 ## Prerequisites
 
@@ -22,31 +24,58 @@ A Node.js script that uses LM Studio to analyze images with local LLM models. Pe
 npm install
 ```
 
+## Quick Start
+
+```bash
+# Show help
+npm run help
+
+# Start a text conversation
+npm run chat "Your question here"
+
+# Analyze an image
+npm run image path/to/image.png
+
+# Analyze a file
+npm run file path/to/file.txt
+```
+
 ## Usage
 
 ### Basic Usage
 
 ```bash
-# Describe an image with default prompt (relative path)
+# Using npm scripts (recommended)
+npm run chat "Explain quantum computing in simple terms"
+npm run image path/to/image.png
+npm run file document.txt
+
+# Using node directly
 node script.js images/image.png
+node script.js -p "Explain quantum computing in simple terms"
+node script.js -f document.txt -p "Summarize this document"
+node script.js -i screenshot.png -f context.txt -p "Analyze this screenshot with the provided context"
+```
 
-# Use absolute path
-node script.js /Users/phtran/Projects/llm_image/images/image.png
+### Available NPM Scripts
 
-# Use a custom prompt
-node script.js images/image.png -p "What text is written on this card?"
-
-# Solve problems in images
-node script.js images/math-problem.png -p "Solve this math problem step by step"
+```bash
+npm run start          # Run the script (same as node script.js)
+npm run analyze        # Alias for start
+npm run help           # Show help and usage information
+npm run chat <prompt>  # Start a text conversation
+npm run image <path>   # Analyze an image (add -p for custom prompt)
+npm run file <path>    # Analyze a file (add -p for custom prompt)
 ```
 
 ### Command Line Options
 
 ```bash
-node script.js [options] [image-path]
+node script.js [options] [input]
 
 Options:
   -i, --image <path>     Path to the image file
+  -f, --file <path>      Path to a text file to include in the prompt
   -p, --prompt <text>    Custom prompt for the LLM
   -m, --model <name>     LLM model to use (default: "google/gemma-3-12b")
   -h, --help            Show help message
@@ -70,20 +99,21 @@ node script.js puzzle.png -p "What is the solution to this puzzle?"
 
 ## Output Format
 
-The script provides a clean, formatted output with:
+The script provides a clean, minimal output:
 
-- 🤖 **LLM Response**: The main analysis/answer
-- 📊 **Model Info**: Performance metrics and model details
-- ⏱️ **Response Time**: How long the model took to respond
+- ⚡ **Progress Indicator**: Animated spinner during response generation
+- 🤖 **LLM Response**: The main analysis/answer (clean and focused)
+- 📊 **No Verbose Logging**: Removed model info and performance metrics for cleaner output
 
 ## Use Cases
 
-- **Image Description**: Get detailed descriptions of images
-- **Text Extraction**: Extract text from images, receipts, documents
+- **Image Analysis**: Get detailed descriptions, extract text, solve problems in images
+- **Document Analysis**: Summarize, review, and analyze text documents
+- **Code Review**: Analyze code files and suggest improvements
+- **Text-Only Conversations**: Have general conversations without images or files
+- **Combined Analysis**: Use images with context files for enhanced analysis
+- **Content Creation**: Generate content based on file inputs
 - **Problem Solving**: Solve math problems, puzzles, or logic questions
-- **Object Recognition**: Identify and describe objects in images
-- **Document Analysis**: Analyze charts, diagrams, and technical documents
-- **Content Moderation**: Check images for inappropriate content
 
 ## Troubleshooting
 

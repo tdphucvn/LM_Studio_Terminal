@@ -1,6 +1,28 @@
 {
+  "name": "llm-image-analyzer",
+  "version": "1.0.0",
+  "description": "A Node.js script that uses LM Studio to analyze images, files, and text with local LLM models",
+  "main": "script.js",
+  "scripts": {
+    "start": "node script.js",
+    "analyze": "node script.js",
+    "image": "node script.js -i",
+    "file": "node script.js -f",
+    "chat": "node script.js -p",
+    "help": "node script.js --help"
+  },
   "type": "module",
   "dependencies": {
     "@lmstudio/sdk": "^1.4.0"
-  }
+  },
+  "keywords": [
+    "llm",
+    "image-analysis",
+    "lm-studio",
+    "ai",
+    "vision",
+    "text-analysis"
+  ],
+  "author": "",
+  "license": "MIT"
 }
