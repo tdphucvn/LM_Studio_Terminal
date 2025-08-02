@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@lmstudio/sdk": "^1.4.0"
+  }
+}
