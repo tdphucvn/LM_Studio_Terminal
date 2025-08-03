@@ -2,18 +2,28 @@
   "name": "llm-image-analyzer",
   "version": "1.0.0",
   "description": "A Node.js script that uses LM Studio to analyze images, files, and text with local LLM models",
-  "main": "script.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node script.js",
-    "analyze": "node script.js",
-    "image": "node script.js -i",
-    "file": "node script.js -f",
-    "chat": "node script.js -p",
-    "help": "node script.js --help"
+    "server": "node --expose-gc server.js",
+    "server:qwen": "node --expose-gc server.js qwen/qwen3-14b",
+    "server:gemma": "node --expose-gc server.js google/gemma-3-12b",
+    "client": "node client.js",
+    "run": "node client.js",
+    "serve": "node --expose-gc server.js",
+    "request": "node client.js",
+    "qwen": "node client.js -m qwen/qwen3-14b",
+    "gemma": "node client.js -m google/gemma-3-12b",
+    "unload": "node client.js -u",
+    "load:qwen": "node client.js -l -m qwen/qwen3-14b",
+    "load:gemma": "node client.js -l -m google/gemma-3-12b",
+    "help": "node client.js --help"
   },
   "type": "module",
   "dependencies": {
     "@lmstudio/sdk": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [
     "llm",
