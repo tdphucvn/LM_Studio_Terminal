@@ -218,7 +218,7 @@ class LLMServer {
           try {
             const requestData = JSON.parse(body);
             const {
-              model = "google/gemma-3-12b",
+              model,
               prompt,
               image,
               file,
@@ -273,9 +273,22 @@ class LLMServer {
               return;
             }
 
+            // Use currently loaded model if no model specified
+            const modelToUse = model || this.currentModelKey;
+            
+            if (!modelToUse) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  error: "No model specified and no model currently loaded. Please load a model first.",
+                })
+              );
+              return;
+            }
+
             // Process the request
             const result = await this.processRequest(
-              model,
+              modelToUse,
               prompt,
               image,
               file

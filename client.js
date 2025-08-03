@@ -16,6 +16,7 @@ function parseArguments() {
     model: "google/gemma-3-12b",
     serverUrl: "http://localhost:3000",
     outputFile: null,
+    modelExplicitlySet: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -53,6 +54,7 @@ function parseArguments() {
       case "-m":
         if (i + 1 < args.length) {
           options.model = args[++i];
+          options.modelExplicitlySet = true;
         } else {
           console.error("❌ Error: -m/--model requires a model name");
           process.exit(1);
@@ -237,12 +239,16 @@ async function main() {
 
     // Prepare request data
     const requestData = {
-      model: options.model,
       prompt: options.prompt,
       image: options.imagePath,
       file: options.filePath,
       action: options.action,
     };
+
+    // Only include model if explicitly specified by user
+    if (options.modelExplicitlySet) {
+      requestData.model = options.model;
+    }
 
     // Show progress indicator
     const stopProgress = showProgress();
