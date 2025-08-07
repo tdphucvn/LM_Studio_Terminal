@@ -143,17 +143,17 @@ Options:
 
 Available Models:
   - google/gemma-3-12b  (supports images, limited reasoning)
-  - qwen/qwen3-14b      (good reasoning, no image support)
+  - openai/gpt-oss-20b      (excellent reasoning, no image support)
 
 Examples:
-  # Text conversation with Qwen (better reasoning)
-  node client.js -m qwen/qwen3-14b -p "Explain quantum computing"
+  # Text conversation with OpenAI GPT OSS 20B (better reasoning)
+  node client.js -m openai/gpt-oss-20b -p "Explain quantum computing"
   
   # Image analysis with Gemma
   node client.js -m google/gemma-3-12b -i image.png -p "What do you see?"
   
-  # File analysis with Qwen
-  node client.js -m qwen/qwen3-14b -f document.txt -p "Summarize this"
+  # File analysis with OpenAI GPT OSS 20B
+  node client.js -m openai/gpt-oss-20b -f document.txt -p "Summarize this"
   
   # Combined analysis
   node client.js -m google/gemma-3-12b -i screenshot.png -f context.txt -p "Analyze with context"
@@ -163,7 +163,7 @@ Examples:
   
   # Model management
   node client.js -u                    # Unload current model
-  node client.js -l -m qwen/qwen3-14b  # Load Qwen model
+  node client.js -l -m openai/gpt-oss-20b  # Load OpenAI GPT OSS 20B model
 `);
 }
 

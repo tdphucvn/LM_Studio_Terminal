@@ -23,6 +23,9 @@ class LLMServer {
   }
 
   async loadModel(modelKey) {
+    console.log(`🔄 Loading model: ${modelKey}`);
+    console.log(`🔄 MODELS: ${MODELS}`);
+
     const modelConfig = MODELS[modelKey];
     if (!modelConfig) {
       throw new Error(`Unknown model: ${modelKey}`);
@@ -217,13 +220,7 @@ class LLMServer {
         req.on("end", async () => {
           try {
             const requestData = JSON.parse(body);
-            const {
-              model,
-              prompt,
-              image,
-              file,
-              action,
-            } = requestData;
+            const { model, prompt, image, file, action } = requestData;
 
             // Handle special actions
             if (action === "unload") {
@@ -275,12 +272,13 @@ class LLMServer {
 
             // Use currently loaded model if no model specified
             const modelToUse = model || this.currentModelKey;
-            
+
             if (!modelToUse) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(
                 JSON.stringify({
-                  error: "No model specified and no model currently loaded. Please load a model first.",
+                  error:
+                    "No model specified and no model currently loaded. Please load a model first.",
                 })
               );
               return;

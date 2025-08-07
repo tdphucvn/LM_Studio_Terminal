@@ -1,3 +1,5 @@
 node_modules
 /images
 /outputs/*
+.github
+docs/plans
