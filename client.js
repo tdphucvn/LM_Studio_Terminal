@@ -11,12 +11,15 @@ function parseArguments() {
   const args = process.argv.slice(2);
   const options = {
     imagePath: null,
-    filePath: null,
+    filePaths: [],
     prompt: null,
     model: "google/gemma-3-12b",
     serverUrl: "http://localhost:3000",
     outputFile: null,
     modelExplicitlySet: false,
+    issueJson: false,
+    jsonOutput: null,
+    structured: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -35,9 +38,17 @@ function parseArguments() {
       case "--file":
       case "-f":
         if (i + 1 < args.length) {
-          options.filePath = args[++i];
+          const value = args[++i];
+          // Support comma-separated list in a single flag
+          const parts = value
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean);
+          options.filePaths.push(...parts);
         } else {
-          console.error("❌ Error: -f/--file requires a file path");
+          console.error(
+            "❌ Error: -f/--file requires a file path or comma-separated list"
+          );
           process.exit(1);
         }
         break;
@@ -86,6 +97,23 @@ function parseArguments() {
           process.exit(1);
         }
         break;
+      case "--issue-json":
+      case "-J":
+        options.issueJson = true;
+        break;
+      case "--json-output":
+      case "-O":
+        if (i + 1 < args.length) {
+          options.jsonOutput = args[++i];
+        } else {
+          console.error("❌ Error: -O/--json-output requires a file path");
+          process.exit(1);
+        }
+        break;
+      case "--structured":
+      case "-R":
+        options.structured = true;
+        break;
       case "--help":
       case "-h":
         showHelp();
@@ -93,7 +121,11 @@ function parseArguments() {
       default:
         // Only set as prompt if we haven't already set image, file, or prompt
         // and this doesn't look like a file path
-        if (!options.imagePath && !options.filePath && !options.prompt) {
+        if (
+          !options.imagePath &&
+          options.filePaths.length === 0 &&
+          !options.prompt
+        ) {
           // Check if this looks like a file path (contains / or .)
           if (arg.includes("/") || arg.includes("\\") || arg.includes(".")) {
             // This looks like a file path, but we don't know if it's an image or text file
@@ -113,7 +145,7 @@ function parseArguments() {
             if (isImage) {
               options.imagePath = arg;
             } else {
-              options.filePath = arg;
+              options.filePaths.push(arg);
             }
           } else {
             // This looks like a prompt
@@ -132,11 +164,14 @@ Usage: node client.js [options] [prompt]
 
 Options:
   -i, --image <path>     Path to the image file
-  -f, --file <path>      Path to a text file to include in the prompt
+  -f, --file <path>      Path(s) to text file(s). Repeat flag or use comma-separated list
   -p, --prompt <text>    Custom prompt for the LLM
   -m, --model <name>     LLM model to use (default: "google/gemma-3-12b")
   -s, --server <url>     Server URL (default: "http://localhost:3000")
   -o, --output <path>    Save output to markdown file
+  -J, --issue-json       Generate a strict JSON issue report from an image (Gemma)
+  -O, --json-output <p>  Save the JSON to a file (use with -J)
+  -R, --structured       Ask for a clean, sectioned markdown reasoning output (OpenAI)
   -u, --unload          Unload current model
   -l, --load            Load specific model (use with -m)
   -h, --help            Show this help message
@@ -158,8 +193,15 @@ Examples:
   # Combined analysis
   node client.js -m google/gemma-3-12b -i screenshot.png -f context.txt -p "Analyze with context"
   
+  # Multiple files
+  node client.js -m openai/gpt-oss-20b -f notes.md -f spec.txt -p "Summarize"
+  node client.js -m openai/gpt-oss-20b -f notes.md,spec.txt -p "Summarize"
+  
   # Save output to markdown file
   node client.js -i image.png -p "What do you see?" -o outputs/analysis.md
+  
+  # Generate an issue JSON from a screenshot and save it
+  node client.js -m google/gemma-3-12b -i screenshot.png -J -O outputs/issue.json
   
   # Model management
   node client.js -u                    # Unload current model
@@ -216,7 +258,7 @@ async function main() {
     if (
       !options.action &&
       !options.imagePath &&
-      !options.filePath &&
+      options.filePaths.length === 0 &&
       !options.prompt
     ) {
       console.error(
@@ -227,9 +269,13 @@ async function main() {
     }
 
     // Validate file paths if provided
-    if (options.filePath && !existsSync(options.filePath)) {
-      console.error(`❌ Error: File not found: ${options.filePath}`);
-      process.exit(1);
+    if (options.filePaths && options.filePaths.length > 0) {
+      for (const fp of options.filePaths) {
+        if (!existsSync(fp)) {
+          console.error(`❌ Error: File not found: ${fp}`);
+          process.exit(1);
+        }
+      }
     }
 
     if (options.imagePath && !existsSync(options.imagePath)) {
@@ -241,9 +287,16 @@ async function main() {
     const requestData = {
       prompt: options.prompt,
       image: options.imagePath,
-      file: options.filePath,
+      files: options.filePaths,
       action: options.action,
     };
+
+    if (options.issueJson) {
+      requestData.mode = "issue_json";
+    }
+    if (options.structured) {
+      requestData.mode = "reasoning_structured";
+    }
 
     // Only include model if explicitly specified by user
     if (options.modelExplicitlySet) {
@@ -261,7 +314,13 @@ async function main() {
 
     // Display result
     if (result.content) {
-      console.log(result.content);
+      // If in issue-json mode and server parsed JSON, prefer printing compact JSON
+      if (options.issueJson && result.json) {
+        const jsonString = JSON.stringify(result.json, null, 2);
+        console.log(jsonString);
+      } else {
+        console.log(result.content);
+      }
       console.log(`\n--- Generated by ${result.model} ---`);
 
       // Save to markdown file if requested
@@ -283,6 +342,57 @@ async function main() {
           console.error(`❌ Error saving output: ${error.message}`);
         }
       }
+
+      // Save JSON output if requested
+      if (options.jsonOutput && options.issueJson) {
+        try {
+          // Ensure the output directory exists
+          const outputDir = dirname(options.jsonOutput);
+          if (!existsSync(outputDir)) {
+            const { mkdirSync } = await import("fs");
+            mkdirSync(outputDir, { recursive: true });
+          }
+
+          let jsonObject = result.json;
+          if (!jsonObject && typeof result.content === "string") {
+            // Try to parse in client as a fallback
+            try {
+              jsonObject = JSON.parse(result.content);
+            } catch (_) {
+              const firstBrace = result.content.indexOf("{");
+              const lastBrace = result.content.lastIndexOf("}");
+              if (
+                firstBrace !== -1 &&
+                lastBrace !== -1 &&
+                lastBrace > firstBrace
+              ) {
+                const maybeJson = result.content.slice(
+                  firstBrace,
+                  lastBrace + 1
+                );
+                try {
+                  jsonObject = JSON.parse(maybeJson);
+                } catch (_) {}
+              }
+            }
+          }
+
+          if (!jsonObject) {
+            throw new Error(
+              "Model did not return valid JSON. Try rerunning with a clearer screenshot."
+            );
+          }
+
+          writeFileSync(
+            options.jsonOutput,
+            JSON.stringify(jsonObject, null, 2),
+            "utf8"
+          );
+          console.log(`\n🧾 JSON saved to: ${options.jsonOutput}`);
+        } catch (error) {
+          console.error(`❌ Error saving JSON: ${error.message}`);
+        }
+      }
     } else if (result.message) {
       console.log(result.message);
     }
@@ -293,7 +403,7 @@ async function main() {
 }
 
 function generateMarkdown(result, options, timestamp) {
-  const { prompt, imagePath, filePath, model } = options;
+  const { prompt, imagePath, filePaths, model } = options;
 
   let markdown = `# LLM Analysis Report\n\n`;
   markdown += `**Generated:** ${new Date().toLocaleString()}\n`;
@@ -311,8 +421,12 @@ function generateMarkdown(result, options, timestamp) {
     markdown += `**Image:** \`${imagePath}\`\n\n`;
   }
 
-  if (filePath) {
-    markdown += `**File:** \`${filePath}\`\n\n`;
+  if (filePaths && filePaths.length > 0) {
+    markdown +=
+      `**Files:**` +
+      "\n\n" +
+      filePaths.map((p) => `- \`${p}\``).join("\n") +
+      "\n\n";
   }
 
   // Output section

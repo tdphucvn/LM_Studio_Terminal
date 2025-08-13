@@ -16,7 +16,9 @@
     "unload": "node client.js -u",
     "load:openai": "node client.js -l -m openai/gpt-oss-20b",
     "load:gemma": "node client.js -l -m google/gemma-3-12b",
-    "help": "node client.js --help"
+    "help": "node client.js --help",
+    "issue:json": "node client.js -m google/gemma-3-12b -i images/image.png -J -O outputs/issue.json",
+    "sandbox:google": "node sandbox/google_proxy_server.js"
   },
   "type": "module",
   "dependencies": {

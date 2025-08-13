@@ -93,10 +93,17 @@ class LLMServer {
     return modelConfig;
   }
 
-  async processRequest(modelKey, prompt, imagePath = null, filePath = null) {
+  async processRequest(
+    modelKey,
+    prompt,
+    imagePath = null,
+    filePaths = [],
+    mode = null
+  ) {
     // Load the requested model
     const modelConfig = await this.loadModel(modelKey);
-    this.validateRequest(modelKey, !!imagePath, !!filePath);
+    const hasAnyFile = Array.isArray(filePaths) && filePaths.length > 0;
+    this.validateRequest(modelKey, !!imagePath, hasAnyFile);
 
     if (!this.currentModel) {
       throw new Error(`Failed to load model: ${modelKey}`);
@@ -106,28 +113,35 @@ class LLMServer {
     let messageContent = prompt || "";
     let images = [];
 
-    // Add file content if provided
-    if (filePath) {
-      console.log(`📂 File path: ${filePath}`);
+    // Add file contents if provided (support multiple files)
+    if (hasAnyFile) {
+      console.log(`📂 Files provided: ${filePaths.length}`);
+      let combinedContent = "";
+      for (const rawPath of filePaths) {
+        if (!rawPath) continue;
+        const resolvedFilePath = rawPath.startsWith("/")
+          ? rawPath
+          : join(process.cwd(), rawPath);
+        console.log(`📂 Resolved file path: ${resolvedFilePath}`);
 
-      // Resolve absolute path if needed
-      const resolvedFilePath = filePath.startsWith("/")
-        ? filePath
-        : join(process.cwd(), filePath);
-      console.log(`📂 Resolved file path: ${resolvedFilePath}`);
+        if (!existsSync(resolvedFilePath)) {
+          throw new Error(`File not found: ${resolvedFilePath}`);
+        }
 
-      if (!existsSync(resolvedFilePath)) {
-        throw new Error(`File not found: ${resolvedFilePath}`);
+        try {
+          const fileContent = readFileSync(resolvedFilePath, "utf8");
+          combinedContent += `\n\n=== File: ${resolvedFilePath} ===\n\n${fileContent}\n`;
+          console.log(
+            `✅ Loaded file (${resolvedFilePath}) - ${fileContent.length} characters`
+          );
+        } catch (error) {
+          throw new Error(
+            `Error reading file (${resolvedFilePath}): ${error.message}`
+          );
+        }
       }
-
-      try {
-        const fileContent = readFileSync(resolvedFilePath, "utf8");
-        messageContent = `File content:\n\n${fileContent}\n\n${messageContent}`;
-        console.log(
-          `✅ File content loaded successfully (${fileContent.length} characters)`
-        );
-      } catch (error) {
-        throw new Error(`Error reading file: ${error.message}`);
+      if (combinedContent.trim().length > 0) {
+        messageContent = `${combinedContent}\n\n${messageContent}`.trim();
       }
     }
 
@@ -156,6 +170,29 @@ class LLMServer {
       }
     }
 
+    // If running in issue JSON mode, build a strict instruction to return JSON only
+    if (mode === "issue_json") {
+      if (images.length === 0) {
+        throw new Error(
+          "issue_json mode requires an image. Provide an image path."
+        );
+      }
+
+      const jsonSchemaInstruction = `You are a vision assistant. Analyze the provided image/screenshot and produce a concise JSON object describing the issue/question shown.\n\nRules:\n- Output JSON ONLY. No markdown, no explanations.\n- Keep strings short and factual.\n- Use null where information is not visible.\n- If the image contains a question and multiple-choice answers, extract them.\n\nJSON schema (keys and types):\n{\n  "title": string,                      // short title for the issue/question\n  "summary": string,                    // 1-2 sentence summary\n  "question": string|null,              // explicit question if present on the image\n  "answer_options": string[]|null,      // array of answer options if present (raw text)\n  "category": string,                   // one of: ui_bug, error_message, form_issue, data_issue, accessibility, configuration, instruction, other\n  "severity": string,                   // one of: low, medium, high, critical\n  "observations": string[],             // bullet-style observations you can directly see\n  "extracted_text": string[]|null,      // key text snippets/OCR if clearly readable\n  "probable_root_cause": string|null,   // your best guess, plain language\n  "suggested_next_prompt": string,      // a single prompt we can pass to a text-only reasoning model to solve or proceed\n  "confidence": number                   // 0.0 - 1.0 overall confidence\n}\n\nIf the user added extra prompt/context, consider it, but still output JSON only.`;
+
+      // Prepend instruction before user text so models follow schema
+      messageContent =
+        `${jsonSchemaInstruction}\n\nUser context (optional):\n${messageContent}`.trim();
+    }
+
+    // If running structured reasoning mode, build a clear, sectioned markdown instruction
+    if (mode === "reasoning_structured") {
+      const structuredInstruction = `You are a precise reasoning assistant. Produce a clear, concise, and well-structured markdown answer.\n\nRules:\n- Use the following sections and headings exactly once each: \n  1. # Title\n  2. ## Problem\n  3. ## Key Facts\n  4. ## Constraints and Assumptions\n  5. ## Reasoning\n  6. ## Solution\n  7. ## Next Actions\n- Keep each section focused and avoid repetition.\n- Prefer bullet points in Key Facts and Next Actions.\n- Do NOT use tables. Use bullet lists only; no markdown table syntax.\n- Provide short, direct sentences.\n- End with a bold one-line final answer summary: **Final Answer: ...**\n\nIf the input includes JSON (e.g., an issue report), extract and cite relevant fields in Key Facts. If something is unknown, omit it rather than guessing.`;
+
+      messageContent =
+        `${structuredInstruction}\n\nUser input:\n${messageContent}`.trim();
+    }
+
     console.log(
       `📤 Sending request with ${images.length} image(s) and ${messageContent.length} characters of text`
     );
@@ -165,14 +202,38 @@ class LLMServer {
       { role: "user", content: messageContent, images: images },
     ]);
 
+    const contentText =
+      prediction.content ||
+      prediction.nonReasoningContent ||
+      "No content available";
+
+    // Try to parse JSON when in issue_json mode
+    let parsedJson = null;
+    if (mode === "issue_json" && typeof contentText === "string") {
+      try {
+        parsedJson = JSON.parse(contentText);
+      } catch (e) {
+        // Try to salvage JSON if model added extra text
+        try {
+          const firstBrace = contentText.indexOf("{");
+          const lastBrace = contentText.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const maybeJson = contentText.slice(firstBrace, lastBrace + 1);
+            parsedJson = JSON.parse(maybeJson);
+          }
+        } catch (_) {
+          parsedJson = null;
+        }
+      }
+    }
+
     return {
-      content:
-        prediction.content ||
-        prediction.nonReasoningContent ||
-        "No content available",
+      content: contentText,
+      json: parsedJson,
       model: modelConfig.name,
       modelKey: modelKey,
       stats: prediction.stats || {},
+      mode: mode || null,
     };
   }
 
@@ -220,7 +281,8 @@ class LLMServer {
         req.on("end", async () => {
           try {
             const requestData = JSON.parse(body);
-            const { model, prompt, image, file, action } = requestData;
+            const { model, prompt, image, file, files, action, mode } =
+              requestData;
 
             // Handle special actions
             if (action === "unload") {
@@ -259,12 +321,18 @@ class LLMServer {
               return;
             }
 
-            if (!prompt && !image && !file) {
+            const filesArray = Array.isArray(files)
+              ? files
+              : file
+              ? [file]
+              : [];
+
+            if (!prompt && !image && filesArray.length === 0) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(
                 JSON.stringify({
                   error:
-                    "At least one input is required (prompt, image, or file)",
+                    "At least one input is required (prompt, image, or files)",
                 })
               );
               return;
@@ -289,7 +357,8 @@ class LLMServer {
               modelToUse,
               prompt,
               image,
-              file
+              filesArray,
+              mode || null
             );
 
             res.writeHead(200, { "Content-Type": "application/json" });
@@ -341,7 +410,7 @@ class LLMServer {
      "model": "google/gemma-3-12b",
      "prompt": "Your question here",
      "image": "/path/to/image.png",  // optional
-     "file": "/path/to/file.txt"     // optional
+     "files": ["/path/to/file1.txt", "/path/to/file2.md"]  // optional, can also use legacy 'file'
    }`);
     });
 
